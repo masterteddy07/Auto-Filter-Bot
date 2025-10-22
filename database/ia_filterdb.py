@@ -69,3 +69,34 @@ def get_secondary_db_storage():
     return stats.get('storageSize', 0)
 
 # ...rest of your existing functions remain unchanged...
+async def save_file(media):
+    file_id = unpack_new_file_id(media.file_id)
+    file_name = re.sub(r"@\w+|(_|\-|\.|\+)", " ", str(media.file_name))
+    file_caption = re.sub(r"@\w+|(_|\-|\.|\+)", " ", str(media.caption))
+    
+    document = {
+        '_id': file_id,
+        'file_name': file_name,
+        'file_size': media.file_size,
+        'caption': file_caption
+    }
+    
+    try:
+        collection.insert_one(document)
+        logger.info(f'Saved - {file_name}')
+        return 'suc'
+    except DuplicateKeyError:
+        logger.warning(f'Already Saved - {file_name}')
+        return 'dup'
+    except OperationFailure:
+        if SECOND_FILES_DATABASE_URL:
+            try:
+                second_collection.insert_one(document)
+                logger.info(f'Saved to 2nd db - {file_name}')
+                return 'suc'
+            except DuplicateKeyError:
+                logger.warning(f'Already Saved in 2nd db - {file_name}')
+                return 'dup'
+        else:
+            logger.error(f'your FILES_DATABASE_URL is already full, add SECOND_FILES_DATABASE_URL')
+            return 'err'
