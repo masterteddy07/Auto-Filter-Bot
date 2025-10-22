@@ -100,3 +100,8 @@ async def save_file(media):
         else:
             logger.error(f'your FILES_DATABASE_URL is already full, add SECOND_FILES_DATABASE_URL')
             return 'err'
+async def get_file_details(query):
+    file_details = collection.find_one({'_id': query})
+    if not file_details and SECOND_FILES_DATABASE_URL:
+        file_details = second_collection.find_one({'_id': query})
+    return file_details
