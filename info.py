@@ -48,8 +48,8 @@ COLLECTION_NAME = environ.get('COLLECTION_NAME', 'Silicon_Files')
 # Verify/Shortlink Settings 
 
 IS_VERIFY = is_enabled('IS_VERIFY', True)
-LOG_VR_CHANNEL = int(environ.get('LOG_VR_CHANNEL', ''))
-LOG_API_CHANNEL = int(environ.get('LOG_API_CHANNEL', ''))
+LOG_VR_CHANNEL = int(environ.get('LOG_VR_CHANNEL', '0'))
+LOG_API_CHANNEL = int(environ.get('LOG_API_CHANNEL', '0'))
 TUTORIAL = environ.get("TUTORIAL", "https://t.me/Silicon_Bot_Update")
 TUTORIAL2 = environ.get("TUTORIAL2", "https://t.me/Silicon_Bot_Update")
 TUTORIAL3 = environ.get("TUTORIAL3", "https://t.me/Silicon_Bot_Update")
