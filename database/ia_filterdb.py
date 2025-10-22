@@ -9,7 +9,7 @@ from info import USE_CAPTION_FILTER, FILES_DATABASE_URL, SECOND_FILES_DATABASE_U
 
 logger = logging.getLogger(__name__)
 
-client = MongoClient(FILES_DATABASE_URL)
+client = MongoClient(FILES_DATABASE_URL or "mongodb://localhost:27017/filesdb")
 db = client[DATABASE_NAME]
 collection = db[COLLECTION_NAME]
 second_collection = None  
