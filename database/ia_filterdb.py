@@ -9,8 +9,22 @@ from info import USE_CAPTION_FILTER, FILES_DATABASE_URL, SECOND_FILES_DATABASE_U
 
 logger = logging.getLogger(__name__)
 
-# Always provide a URI fallback - never allow empty string in MongoClient
-files_db_url = FILES_DATABASE_URL if FILES_DATABASE_URL and "@" in FILES_DATABASE_URL else "mongodb://localhost:27017/filesdb"
+def valid_mongo_uri(uri):
+    # Minimum valid: must start with "mongodb" and have '@' if username/password in string version
+    # SRV uris (MongoDB Atlas) start with mongodb+srv:// and may not have username
+    if uri and uri.startswith("mongodb"):
+        if "@:" in uri or "@" == uri or "@" not in uri:
+            return False
+        return True
+    return False
+
+uri_from_env = FILES_DATABASE_URL or ""
+if valid_mongo_uri(uri_from_env):
+    files_db_url = uri_from_env
+else:
+    files_db_url = "mongodb://localhost:27017/filesdb"
+    logger.warning("FILES_DATABASE_URL was missing or invalid. Falling back to localhost.")
+
 client = MongoClient(files_db_url)
 db = client[DATABASE_NAME]
 collection = db[COLLECTION_NAME]
@@ -27,7 +41,7 @@ except OperationFailure as e:
     else:
         logger.exception(e)
 
-if SECOND_FILES_DATABASE_URL and "@" in SECOND_FILES_DATABASE_URL:
+if SECOND_FILES_DATABASE_URL and valid_mongo_uri(SECOND_FILES_DATABASE_URL):
     second_client = MongoClient(SECOND_FILES_DATABASE_URL)
     second_db = second_client[DATABASE_NAME]
     second_collection = second_db[COLLECTION_NAME]
@@ -52,5 +66,4 @@ def get_secondary_db_storage():
     stats = second_db.command("dbStats")
     return stats.get('storageSize', 0)
 
-# rest of your functions unchanged...
-
+# ...rest of your existing functions unchanged...
