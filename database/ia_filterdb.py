@@ -49,18 +49,23 @@ if SECOND_FILES_DATABASE_URL and valid_mongo_uri(SECOND_FILES_DATABASE_URL):
     second_collection = second_db[COLLECTION_NAME]
     second_collection.create_index([("file_name", TEXT)])
 
+
 def is_second_db_configured() -> bool:
     return bool(SECOND_FILES_DATABASE_URL and 'second_collection' in globals() and second_collection is not None)
+
 
 def second_db_count_documents():
     return second_collection.count_documents({}) if second_collection else 0
 
+
 def db_count_documents():
     return collection.count_documents({})
+
 
 def get_primary_db_storage():
     stats = db.command("dbStats")
     return stats.get('storageSize', 0)
+
 
 def get_secondary_db_storage():
     if not is_second_db_configured():
@@ -68,7 +73,7 @@ def get_secondary_db_storage():
     stats = second_db.command("dbStats")
     return stats.get('storageSize', 0)
 
-# ...rest of your existing functions remain unchanged...
+
 async def save_file(media):
     file_id = unpack_new_file_id(media.file_id)
     file_name = re.sub(r"@\w+|(_|\-|\.|\+)", " ", str(media.file_name))
@@ -100,8 +105,112 @@ async def save_file(media):
         else:
             logger.error(f'your FILES_DATABASE_URL is already full, add SECOND_FILES_DATABASE_URL')
             return 'err'
+
+
+async def get_search_results(query, max_results=MAX_BTN, offset=0, lang=None):
+    query = str(query).strip()
+    if not query:
+        raw_pattern = '.'
+    elif ' ' not in query:
+        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
+    else:
+        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
+    
+    try:
+        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+    except:
+        regex = query
+
+    if USE_CAPTION_FILTER:
+        filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+    else:
+        filter = {'file_name': regex}
+
+    cursor = collection.find(filter)
+    results = [doc for doc in cursor]
+
+    if SECOND_FILES_DATABASE_URL:
+        cursor2 = second_collection.find(filter)
+        results.extend([doc for doc in cursor2])
+
+    if lang:
+        lang_files = [file for file in results if lang in file['file_name'].lower()]
+        total_results = len(lang_files)
+        files = lang_files[offset:offset + max_results]
+        next_offset = offset + max_results
+        if next_offset >= total_results:
+            next_offset = ''
+        return files, next_offset, total_results
+
+    total_results = len(results)
+    files = results[offset:][:max_results]
+    next_offset = offset + max_results
+    if next_offset >= total_results:
+        next_offset = ''   
+    return files, next_offset, total_results
+
+
+async def delete_files(query):
+    query = query.strip()
+    if not query:
+        raw_pattern = '.'
+    elif ' ' not in query:
+        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
+    else:
+        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
+    
+    try:
+        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+    except:
+        regex = query
+        
+    filter = {'file_name': regex}
+    
+    result1 = collection.delete_many(filter)
+    
+    result2 = None
+    if SECOND_FILES_DATABASE_URL:
+        result2 = second_collection.delete_many(filter)
+    
+    total_deleted = result1.deleted_count
+    if result2:
+        total_deleted += result2.deleted_count
+    
+    return total_deleted
+
+
 async def get_file_details(query):
     file_details = collection.find_one({'_id': query})
     if not file_details and SECOND_FILES_DATABASE_URL:
         file_details = second_collection.find_one({'_id': query})
     return file_details
+
+
+def encode_file_id(s: bytes) -> str:
+    r = b""
+    n = 0
+    for i in s + bytes([22]) + bytes([4]):
+        if i == 0:
+            n += 1
+        else:
+            if n:
+                r += b"\x00" + bytes([n])
+                n = 0
+            r += bytes([i])
+    return base64.urlsafe_b64encode(r).decode().rstrip("=")
+
+
+def unpack_new_file_id(new_file_id):
+    decoded = FileId.decode(new_file_id)
+    file_id = encode_file_id(
+        pack(
+            "<iiqq",
+            int(decoded.file_type),
+            decoded.dc_id,
+            decoded.media_id,
+            decoded.access_hash
+        )
+    )
+    return file_id
+
+# Code By HABot Modified By @SiliconBots
